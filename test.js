@@ -293,7 +293,7 @@ class GameHandler {
 
     connect(ip) {
         this.connected = true;
-        const socket = new WebSocket(`ws://${ip}`);
+        const socket = new WebSocket(`wss://${ip}`);
         this.room = new ServerHandler(socket);
         overwriteGameFunctions();
         document.querySelectorAll(".elementButton").forEach(b => b.remove());
