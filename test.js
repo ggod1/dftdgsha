@@ -1,3 +1,11 @@
+// TEST TO AVOID EMPTY USERNAMES
+// TODO: TO BE REMOVED
+// let username = prompt("Username");
+// if (!username) alert("bro"), username = "qwertyuiop";
+
+// let color = prompt("Color (i swear itll be better once its finished)")
+// if (!color) color = "#ffffff";
+
 const Packet = {
     SCIdentify: 0,
     SSIdentify: 1,
@@ -169,13 +177,13 @@ class ServerHandler {
 
     async identify(message) {
         console.log("IDENTIFY", sessionHandler.session);
-        const response = await fetch("http://165.227.144.40:3001/serverAuth/generate", {
+        const response = await fetch("https://sandboxelsserver.xyz/auth/serverAuth/generate", {
             body: JSON.stringify({
                 session: sessionHandler.session,
                 serverIP: "165.227.144.40:7474"
             }),
             mode: "cors",
-            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "http://165.227.144.40:3001"},        
+            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "https://sandboxelsserver.xyz/auth"},        
             method: "POST"
         });
         const accessToken = await response.text();
@@ -293,7 +301,7 @@ class GameHandler {
 
     connect(ip) {
         this.connected = true;
-        const socket = new WebSocket(`ws://${ip}`);
+        const socket = new WebSocket(`wss://${ip}`);
         this.room = new ServerHandler(socket);
         overwriteGameFunctions();
         document.querySelectorAll(".elementButton").forEach(b => b.remove());
@@ -315,12 +323,12 @@ class SessionHandler {
     async validateCookie() {
         const cookie = document.cookie.split(";").find(a => a.trim().startsWith("sbSession="))?.trim().split("=")[1];
         if (!cookie) return false;
-        const response = await fetch("http://165.227.144.40:3001/auth/validate", {
+        const response = await fetch("https://sandboxelsserver.xyz/auth/auth/validate", {
             body: JSON.stringify({
                 session: cookie
             }),
             mode: "cors",
-            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "http://165.227.144.40:3001"},        
+            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "https://sandboxelsserver.xyz/auth"},        
             method: "POST"
         })
 
@@ -345,7 +353,7 @@ class SessionHandler {
     }
 
     authorize() {
-        window.location.href = "http://165.227.144.40:3001/auth";
+        window.location.href = "https://sandboxelsserver.xyz/auth/auth";
     }
 
     async getSession() {
@@ -353,12 +361,12 @@ class SessionHandler {
             console.log("token");
             const token = urlParams.get("token");
             console.log(token);
-            const response = await fetch("http://165.227.144.40:3001/auth/token", {
+            const response = await fetch("https://sandboxelsserver.xyz/auth/auth/token", {
                 body: JSON.stringify({
                     accessToken: token
                 }),
                 mode: "cors",
-                headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "http://165.227.144.40:3001"},            
+                headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "https://sandboxelsserver.xyz/auth"},            
                 method: "POST"
             })
 
@@ -370,12 +378,12 @@ class SessionHandler {
 
     async fetchUserInfo() {
         const session = this.session;
-        const response = await fetch("http://165.227.144.40:3001/auth/session", {
+        const response = await fetch("https://sandboxelsserver.xyz/auth/auth/session", {
             body: JSON.stringify({
                 session
             }),
             mode: "cors",
-            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "http://165.227.144.40:3001"},        
+            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "https://sandboxelsserver.xyz/auth"},        
             method: "POST"
         });
 
