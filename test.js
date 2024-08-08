@@ -1,11 +1,3 @@
-// TEST TO AVOID EMPTY USERNAMES
-// TODO: TO BE REMOVED
-// let username = prompt("Username");
-// if (!username) alert("bro"), username = "qwertyuiop";
-
-// let color = prompt("Color (i swear itll be better once its finished)")
-// if (!color) color = "#ffffff";
-
 const Packet = {
     SCIdentify: 0,
     SSIdentify: 1,
@@ -180,7 +172,7 @@ class ServerHandler {
         const response = await fetch("https://sandboxelsserver.xyz/auth/serverAuth/generate", {
             body: JSON.stringify({
                 session: sessionHandler.session,
-                serverIP: "165.227.144.40:7474"
+                serverIP: "sandboxelsserver.xyz/play/room1"
             }),
             mode: "cors",
             headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "https://sandboxelsserver.xyz/auth"},        
