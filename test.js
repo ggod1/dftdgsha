@@ -496,6 +496,7 @@ function chatLoader() {
         .setTitle("Chat")
         .setParentDivId("chatParent")
         .setInnerDivId("chat")
+        .setMenuTextId("chatMenuText")
         .addNode([chatNote, messageList, document.createElement("br"), document.createElement("br")])
         .build();
     document.getElementById("chatParent").append(chatInput);
