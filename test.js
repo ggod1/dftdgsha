@@ -64,9 +64,13 @@ class ChatHandler {
             messageAuthor.style.marginTop = 0;
             messageAuthor.textContent = message.authorUsername ?? "Anonymous";
             const color = message.authorColor;
-            messageAuthor.style.background = (color.length > 0 ? `linear-gradient(to right, ${color.join(", ")})` : color[0]) ?? "#ffffff";
-            messageAuthor.style.backgroundClip = "text";
-            messageAuthor.style.webkitTextFillColor = "transparent";
+            if (color.length > 0) {
+                messageAuthor.style.background = `linear-gradient(to right, ${color.join(", ")})`;
+                messageAuthor.style.backgroundClip = "text";
+                messageAuthor.style.webkitTextFillColor = "transparent"
+            } else {
+                messageAuthor.style = color[0] ?? "#ffffff";
+            }
             const messageContent = document.createElement("h6");
             messageContent.style.marginTop = 0;
             messageContent.style.marginBottom = 0;
@@ -78,6 +82,7 @@ class ChatHandler {
         else if (message.messageType == ChatMessageType.LEAVE) this.playerLeft(message);
         else if (message.messageType == ChatMessageType.JOIN) this.playerJoined(message);
         else if (message.messageType == ChatMessageType.SYSTEM) this.systemMessage(message.content);
+        document.getElementById("messageList").scrollTop = docuemnt.getElementById("messageList").scrollHeight;
     }
 
     getPrevious(createdAt) {
@@ -485,7 +490,7 @@ function chatLoader() {
         }
     }
     const style = document.createElement("style");
-    style.innerHTML = `#chatMessage { position: absolute; bottom: 59.4%; width: 95%; max-width: 700px; height: 50px; left: 50%; transform: translate(-50%, 198.5%); background-color: rgb(66, 66, 66); color: white; font-size: 1.5em; padding: 8px; font-family: 'Press Start 2P'; z-index: 11; }\n#messageList {overflow: auto; margin-left: 0; max-height: 20%; height: 20%; position: relative;}`
+    style.innerHTML = `#chatMessage { position: absolute; bottom: 59.4%; width: 95%; max-width: 700px; height: 50px; left: 50%; transform: translate(-50%, 198.5%); background-color: rgb(66, 66, 66); color: white; font-size: 1.5em; padding: 8px; font-family: 'Press Start 2P'; z-index: 11; }\n#messageList {overflow: auto; margin-left: 0; max-height: 20%; height: 20%; position: relative; margin-bottom: 50px}`
     document.head.append(style);
     new MenuScreen()
         .setTitle("Chat")
