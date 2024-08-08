@@ -55,7 +55,6 @@ class ChatHandler {
 
     handleMessage(message) {
         this.messages.set(message.id, message);
-        console.log(message);
         if (message.messageType == ChatMessageType.MESSAGE) {
             const previous = this.getPrevious(message.createdAt);
             const messageElement = document.createElement("div");
@@ -64,13 +63,9 @@ class ChatHandler {
             messageAuthor.style.marginTop = 0;
             messageAuthor.textContent = message.authorUsername ?? "Anonymous";
             const color = message.authorColor;
-            if (color.length > 0) {
-                messageAuthor.style.background = `linear-gradient(to right, ${color.join(", ")})`;
-                messageAuthor.style.backgroundClip = "text";
-                messageAuthor.style.webkitTextFillColor = "transparent"
-            } else {
-                messageAuthor.style = color[0] ?? "#ffffff";
-            }
+            messageAuthor.style.background = `linear-gradient(to right, ${color.length == 1 ? `${color}, ${color}` : color.join(", ")})`;
+            messageAuthor.style.backgroundClip = "text";
+            messageAuthor.style.webkitTextFillColor = "transparent";
             const messageContent = document.createElement("h6");
             messageContent.style.marginTop = 0;
             messageContent.style.marginBottom = 0;
@@ -82,7 +77,7 @@ class ChatHandler {
         else if (message.messageType == ChatMessageType.LEAVE) this.playerLeft(message);
         else if (message.messageType == ChatMessageType.JOIN) this.playerJoined(message);
         else if (message.messageType == ChatMessageType.SYSTEM) this.systemMessage(message.content);
-        document.getElementById("messageList").scrollTop = docuemnt.getElementById("messageList").scrollHeight;
+        document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
     }
 
     getPrevious(createdAt) {
@@ -115,7 +110,7 @@ class ChatHandler {
         messageAuthor.style.marginBottom = "5px";
         messageAuthor.style.marginTop = 0;
         messageAuthor.textContent = username + " left the game";
-        messageAuthor.style.background = (color.length > 0 ? `linear-gradient(to right, ${color.join(", ")})` : color[0]) ?? "#ffffff";
+        messageAuthor.style.background = `linear-gradient(to right, ${color.length == 1 ? `${color}, ${color}` : color.join(", ")})`;
         messageAuthor.style.backgroundClip = "text";
         messageAuthor.style.webkitTextFillColor = "transparent";
         messageElement.append(messageAuthor);
@@ -132,7 +127,7 @@ class ChatHandler {
         messageAuthor.style.marginBottom = "5px";
         messageAuthor.style.marginTop = 0;
         messageAuthor.textContent = username + " joined the game";
-        messageAuthor.style.background = (color.length > 0 ? `linear-gradient(to right, ${color.join(", ")})` : color[0]) ?? "#ffffff";
+        messageAuthor.style.background = `linear-gradient(to right, ${color.length == 1 ? `${color}, ${color}` : color.join(", ")})`;
         messageAuthor.style.backgroundClip = "text";
         messageAuthor.style.webkitTextFillColor = "transparent";
         messageElement.append(messageAuthor);
@@ -490,7 +485,7 @@ function chatLoader() {
         }
     }
     const style = document.createElement("style");
-    style.innerHTML = `#chatMessage { position: absolute; bottom: 59.4%; width: 95%; max-width: 700px; height: 50px; left: 50%; transform: translate(-50%, 198.5%); background-color: rgb(66, 66, 66); color: white; font-size: 1.5em; padding: 8px; font-family: 'Press Start 2P'; z-index: 11; }\n#messageList {overflow: auto; margin-left: 0; max-height: 20%; height: 20%; position: relative; margin-bottom: 50px}`
+    style.innerHTML = `#chatMessage { position: absolute; bottom: 59.4%; width: 95%; max-width: 700px; height: 50px; left: 50%; transform: translate(-50%, 198.5%); background-color: rgb(66, 66, 66); color: white; font-size: 1.5em; padding: 8px; font-family: 'Press Start 2P'; z-index: 11; }\n#messageList {margin-left: 0; max-height: 20%; height: 20%; position: relative; margin-bottom: 50px}\n#chatMenuText {margin-bottom: 50px, padding-bottom: 50px;}\n#chat::-webkit-scrollbar {display: none}\n#chat {-ms-overflow-style: none; scrollbar-width: none;}`
     document.head.append(style);
     new MenuScreen()
         .setTitle("Chat")
@@ -521,81 +516,37 @@ const oldConstructor = Pixel.prototype.constructor;
 const oldProto = Pixel.prototype;
 const oldUpdateStats = updateStats;
 const oldMouse2Action = mouse2Action;
-const oldCreateElementButton = createElementButton; 
+const oldCreateElementButton = createElementButton;
+const oldCreatePixel = createPixel;
+const oldTickPixels = tickPixels;
+const oldDrawLayers = drawLayers;
 
 function overwriteGameFunctions() {
-    drawPixels = (forceTick=false) => {
-        if (ctx === null) return
-        var newCurrentPixels = gameHandler.room.pixels
-        var pixelsFirst = [];
-        var pixelsLast = [];
-        
-        for (var i = 0; i < newCurrentPixels.length; i++) {
-            var pixel = newCurrentPixels[i];
-            if (pixel.con) { pixel = pixel.con }
-            if (elements[pixel.element].isGas || elements[pixel.element].glow) {
-                pixelsLast.push(pixel);
+    drawLayers = (includeBackground) => {
+        if (ctx === null) return console.log('a');
+        clearLayers();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (settings.bg) { // Set background color
+            if (canvas.style.backgroundColor !== settings.bg) {
+                canvas.style.backgroundColor = settings.bg;
             }
-            else {
-                pixelsFirst.push(pixel);
+            if (includeBackground) {
+                ctx.fillStyle = settings.bg;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
         }
-        if (!hiding) {
-    
-        if (!settings["bg"]) {ctx.clearRect(0, 0, canvas.width, canvas.height)}
-        else {
-            ctx.fillStyle = settings["bg"];
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < canvasLayersPre.length; i++) {
+            const layerCanvas = canvasLayersPre[i];
+            ctx.drawImage(layerCanvas, 0, 0);
         }
-        var pixelDrawList = pixelsFirst.concat(pixelsLast);
-        for (var i = 0; i < pixelDrawList.length; i++) {
-            var pixel = pixelDrawList[i];
-            if (pixel.con) { pixel = pixel.con }
-            if (view===null || view===3) {
-                ctx.fillStyle = pixel.color;
-            }
-            else if (view === 2) { // thermal view
-                var temp = pixel.temp;
-                if (temp < -50) {temp = -50}
-                if (temp > 6000) {temp = 6000}
-                // logarithmic scale, with coldest being 225 (-50 degrees) and hottest being 0 (6000 degrees)
-                var hue = Math.round(225 - (Math.log(temp+50)/Math.log(6000+50))*225);
-                if (hue < 0) {hue = 0}
-                if (hue > 225) {hue = 225}
-                ctx.fillStyle = "hsl("+hue+",100%,50%)";
-            }
-            if (ctx.globalAlpha < 1 && !(elements[pixel.element].isGas || elements[pixel.element].glow)) {
-                ctx.globalAlpha = 1;
-            }
-            if (view === null && ((elements[pixel.element].isGas && elements[pixel.element].glow !== false) || elements[pixel.element].glow)) {
-                if (ctx.globalAlpha!==0.5) { ctx.globalAlpha = 0.5; }
-                ctx.fillRect((pixel.x-1)*pixelSize, (pixel.y)*pixelSize, pixelSize*3, pixelSize);
-                ctx.fillRect((pixel.x)*pixelSize, (pixel.y-1)*pixelSize, pixelSize, pixelSize*3);
-            }
-            else { // draw the pixel (default)
-                ctx.fillRect(pixel.x*pixelSize, pixel.y*pixelSize, pixelSize, pixelSize);
-            }
-            if (pixel.charge && view !== 2) { // Yellow glow on charge
-                if (!elements[pixel.element].colorOn) {
-                    ctx.fillStyle = "rgba(255,255,0,0.5)";
-                    ctx.fillRect(pixel.x*pixelSize, pixel.y*pixelSize, pixelSize, pixelSize);
-                }
-            }
+        if (!drawPixels() && !paused) {
+            logMessage("One or more of your mods are outdated and cannot render properly.");
+            togglePause();
         }
-        }
-        if (ctx.globalAlpha < 1) {
-            ctx.globalAlpha = 1;
-        }
-    
+        drawCursor();
         for (const pos of gameHandler.room.mousePositions) {
-            if (pos.player == gameHandler.room.id) {
-                var mouseOffset = Math.trunc(pos.size/2);
-                var topLeft = [pos.position[0]-mouseOffset,pos.position[1]-mouseOffset];
-                var bottomRight = [pos.position[0]+mouseOffset,pos.position[1]+mouseOffset];
-                // Draw a square around the mouse
-                ctx.strokeStyle = "#ffffff";
-                ctx.strokeRect(topLeft[0]*pixelSize,topLeft[1]*pixelSize,(bottomRight[0]-topLeft[0]+1)*pixelSize,(bottomRight[1]-topLeft[1]+1)*pixelSize);
-            } else {
+            if (pos.player == gameHandler.room.id) continue;
+            else {
                 var mouseOffset = Math.trunc(pos.size/2);
                 var topLeft = [pos.position[0]-mouseOffset,pos.position[1]-mouseOffset];
                 var bottomRight = [pos.position[0]+mouseOffset,pos.position[1]+mouseOffset];
@@ -627,9 +578,10 @@ function overwriteGameFunctions() {
                 ctx.fillText(username, (pos.position[0] - mouseOffset) * pixelSize + (pos.size * pixelSize / 2) - textWidth / 2, pos.position[1] * pixelSize + pos.size * pixelSize + 2);
             }
         }
-        if ((!paused) || forceTick) {pixelTicks++};
-    
-        if (showingMenu) return;
+        for (let i = 0; i < canvasLayersPost.length; i++) {
+            const layerCanvas = canvasLayersPost[i];
+            ctx.drawImage(layerCanvas, 0, 0);
+        }
         let a = outOfBounds(mousePos.x, mousePos.y) ? null : [mousePos.x, mousePos.y];
         let b = lastMousePos;
         if ((a == null && Array.isArray(b)) || (Array.isArray(a) && b == null) || (Array.isArray(a) && Array.isArray(b) && (a[0] != b[0] || a[1] != b[1])) || lastMouseSize != mouseSize) {
@@ -654,6 +606,197 @@ function overwriteGameFunctions() {
             }
         }
     }
+    drawPixels = (forceTick=false) => {
+        const canvas = canvasLayers.pixels;
+        const ctx = canvas.getContext("2d");
+        let pixelsFirst = [];
+        let pixelsLast = [];
+        for (let i = 0; i < gameHandler.room.pixels.length; i++) {
+            let pixel = gameHandler.room.pixels[i];
+            if (elements[pixel.element].isGas || elements[pixel.element].glow) {
+                pixelsLast.push(pixel);
+            }
+            else {
+                pixelsFirst.push(pixel);
+            }
+        }
+        // Draw the current pixels
+        if (!hiding) {
+            let pixelDrawList = pixelsFirst.concat(pixelsLast);
+            let viewN = view;
+            if (!viewInfo[viewN]) {
+                viewN = 1;
+            }
+            if (renderPrePixelList.length) {
+                for (let i = 0; i < renderPrePixelList.length; i++) {
+                    renderPrePixelList[i](ctx);
+                }
+            }
+            if (viewInfo[viewN].pre) {
+                viewInfo[viewN].pre(ctx);
+            }
+            if (viewInfo[viewN].pixel) {
+                for (let i = 0; i < pixelDrawList.length; i++) {
+                    let pixel = pixelDrawList[i];
+                    if (elements[pixel.element].renderer && settings.textures !== 0) {
+                        elements[pixel.element].renderer(pixel,ctx);
+                    }
+                    else {
+                        viewInfo[viewN].pixel(pixel,ctx);
+                    }
+                    if (renderEachPixelList.length) {
+                        for (let i = 0; i < renderEachPixelList.length; i++) {
+                            renderEachPixelList[i](pixel,ctx);
+                        }
+                    }
+                }
+            }
+            if (renderPostPixelList.length) {
+                for (let i = 0; i < renderPostPixelList.length; i++) {
+                    renderPostPixelList[i](ctx);
+                }
+            }
+            if (viewInfo[viewN].post) {
+                viewInfo[viewN].post(ctx);
+            }
+        }
+        if (ctx.globalAlpha < 1) {
+            ctx.globalAlpha = 1;
+        }
+        return true;
+    }
+    // drawPixels = (forceTick=false) => {
+    //     if (ctx === null) return
+    //     var newCurrentPixels = gameHandler.room.pixels
+    //     var pixelsFirst = [];
+    //     var pixelsLast = [];
+        
+    //     for (var i = 0; i < newCurrentPixels.length; i++) {
+    //         var pixel = newCurrentPixels[i];
+    //         if (pixel.con) { pixel = pixel.con }
+    //         if (elements[pixel.element].isGas || elements[pixel.element].glow) {
+    //             pixelsLast.push(pixel);
+    //         }
+    //         else {
+    //             pixelsFirst.push(pixel);
+    //         }
+    //     }
+    //     if (!hiding) {
+    
+    //     if (!settings["bg"]) {ctx.clearRect(0, 0, canvas.width, canvas.height)}
+    //     else {
+    //         ctx.fillStyle = settings["bg"];
+    //         ctx.fillRect(0, 0, canvas.width, canvas.height);
+    //     }
+    //     var pixelDrawList = pixelsFirst.concat(pixelsLast);
+    //     for (var i = 0; i < pixelDrawList.length; i++) {
+    //         var pixel = pixelDrawList[i];
+    //         if (pixel.con) { pixel = pixel.con }
+    //         if (view===null || view===3) {
+    //             ctx.fillStyle = pixel.color;
+    //         }
+    //         else if (view === 2) { // thermal view
+    //             var temp = pixel.temp;
+    //             if (temp < -50) {temp = -50}
+    //             if (temp > 6000) {temp = 6000}
+    //             // logarithmic scale, with coldest being 225 (-50 degrees) and hottest being 0 (6000 degrees)
+    //             var hue = Math.round(225 - (Math.log(temp+50)/Math.log(6000+50))*225);
+    //             if (hue < 0) {hue = 0}
+    //             if (hue > 225) {hue = 225}
+    //             ctx.fillStyle = "hsl("+hue+",100%,50%)";
+    //         }
+    //         if (ctx.globalAlpha < 1 && !(elements[pixel.element].isGas || elements[pixel.element].glow)) {
+    //             ctx.globalAlpha = 1;
+    //         }
+    //         if (view === null && ((elements[pixel.element].isGas && elements[pixel.element].glow !== false) || elements[pixel.element].glow)) {
+    //             if (ctx.globalAlpha!==0.5) { ctx.globalAlpha = 0.5; }
+    //             ctx.fillRect((pixel.x-1)*pixelSize, (pixel.y)*pixelSize, pixelSize*3, pixelSize);
+    //             ctx.fillRect((pixel.x)*pixelSize, (pixel.y-1)*pixelSize, pixelSize, pixelSize*3);
+    //         }
+    //         else { // draw the pixel (default)
+    //             ctx.fillRect(pixel.x*pixelSize, pixel.y*pixelSize, pixelSize, pixelSize);
+    //         }
+    //         if (pixel.charge && view !== 2) { // Yellow glow on charge
+    //             if (!elements[pixel.element].colorOn) {
+    //                 ctx.fillStyle = "rgba(255,255,0,0.5)";
+    //                 ctx.fillRect(pixel.x*pixelSize, pixel.y*pixelSize, pixelSize, pixelSize);
+    //             }
+    //         }
+    //     }
+    //     }
+    //     if (ctx.globalAlpha < 1) {
+    //         ctx.globalAlpha = 1;
+    //     }
+    
+    //     for (const pos of gameHandler.room.mousePositions) {
+    //         if (pos.player == gameHandler.room.id) {
+    //             var mouseOffset = Math.trunc(pos.size/2);
+    //             var topLeft = [pos.position[0]-mouseOffset,pos.position[1]-mouseOffset];
+    //             var bottomRight = [pos.position[0]+mouseOffset,pos.position[1]+mouseOffset];
+    //             // Draw a square around the mouse
+    //             ctx.strokeStyle = "#ffffff";
+    //             ctx.strokeRect(topLeft[0]*pixelSize,topLeft[1]*pixelSize,(bottomRight[0]-topLeft[0]+1)*pixelSize,(bottomRight[1]-topLeft[1]+1)*pixelSize);
+    //         } else {
+    //             var mouseOffset = Math.trunc(pos.size/2);
+    //             var topLeft = [pos.position[0]-mouseOffset,pos.position[1]-mouseOffset];
+    //             var bottomRight = [pos.position[0]+mouseOffset,pos.position[1]+mouseOffset];
+    //             // Draw a square around the mouse
+    //             const color = gameHandler.room.clients.get(pos.player)?.color ?? ["#ffffff"];
+    //             let strokeStyle = color[0];
+    //             if (color.length > 1) {
+    //                 strokeStyle = ctx.createLinearGradient(topLeft[0]*pixelSize,topLeft[1]*pixelSize,(bottomRight[0]-topLeft[0]+1)*pixelSize,(bottomRight[1]-topLeft[1]+1)*pixelSize)
+    //                 for (let i = 0; i < color.length; i++) {
+    //                     strokeStyle.addColorStop((1 / color.length) * i, color[i]);
+    //                 }
+    //             }
+    //             ctx.strokeStyle = strokeStyle;
+    //             ctx.strokeRect(topLeft[0]*pixelSize,topLeft[1]*pixelSize,(bottomRight[0]-topLeft[0]+1)*pixelSize,(bottomRight[1]-topLeft[1]+1)*pixelSize);
+    //             const username = gameHandler.room.clients.get(pos.player)?.username;
+    //             ctx.font = '10px "Press Start 2P"'
+
+    //             const textWidth = ctx.measureText(username).width;
+    //             let textStyle = color[0];
+    //             if (color.length > 1) {
+    //                 textStyle = ctx.createLinearGradient((pos.position[0] - mouseOffset) * pixelSize + (pos.size * pixelSize / 2) - textWidth / 2, pos.position[1] * pixelSize + pos.size * pixelSize + 2, (pos.position[0] - mouseOffset) * pixelSize + (pos.size * pixelSize / 2) - textWidth / 2 + textWidth, pos.position[1] * pixelSize + pos.size * pixelSize + 2 + 10);
+    //                 for (let i = 0; i < color.length; i++) {
+    //                     textStyle.addColorStop((1 / color.length) * i, color[i]);
+    //                 }
+    //             }
+
+    //             ctx.fillStyle = textStyle
+    //             // ctx.fillText(username, topLeft[0] * pixelSize - ctx.measureText(username), topLeft[1] * pixelSize);
+    //             ctx.fillText(username, (pos.position[0] - mouseOffset) * pixelSize + (pos.size * pixelSize / 2) - textWidth / 2, pos.position[1] * pixelSize + pos.size * pixelSize + 2);
+    //         }
+    //     }
+    //     if ((!paused) || forceTick) {pixelTicks++};
+    
+    //     if (showingMenu) return;
+    //     let a = outOfBounds(mousePos.x, mousePos.y) ? null : [mousePos.x, mousePos.y];
+    //     let b = lastMousePos;
+    //     if ((a == null && Array.isArray(b)) || (Array.isArray(a) && b == null) || (Array.isArray(a) && Array.isArray(b) && (a[0] != b[0] || a[1] != b[1])) || lastMouseSize != mouseSize) {
+    //         if (outOfBounds(mousePos.x, mousePos.y)) {
+    //             gameHandler.room.sendMessage(Packet.GSClientState, {
+    //                 state: {
+    //                     mousePos: null,
+    //                     mouseSize
+    //                 }
+    //             })
+    //             lastMousePos = null;
+    //             lastMouseSize = mouseSize;
+    //         } else {
+    //             gameHandler.room.sendMessage(Packet.GSClientState, {
+    //                 state: {
+    //                     mousePos: [mousePos.x, mousePos.y],
+    //                     mouseSize
+    //                 }
+    //             })
+    //             lastMousePos = [mousePos.x, mousePos.y];
+    //             lastMouseSize = mouseSize;
+    //         }
+    //     }
+    //     return true;
+    // }
+    
     
     isEmpty = (x, y, ignoreBounds=false, oob=undefined) => {
         if (oob || outOfBounds(x,y)) {
@@ -927,6 +1070,12 @@ function overwriteGameFunctions() {
         }
         categoryDiv.appendChild(button);
     }
+
+    createPixel = () => {};
+    tickPixels = () => {};
+
+    window.clearInterval(renderInterval);
+    renderInterval = window.setInterval(drawLayers, 1000/60);
 }
 
 function returnGameFunctions() {
@@ -938,6 +1087,9 @@ function returnGameFunctions() {
     updateStats = oldUpdateStats;
     mouse2Action = oldMouse2Action;
     createElementButton = oldCreateElementButton;
+    createPixel = oldCreatePixel;
+    tickPixels = oldTickPixels;
+    drawLayers = oldDrawLayers;
     document.querySelectorAll(".elementButton").forEach(a => a.remove());
     for (var element in elements) {
         if (elementCount === 0) { currentElement = element; firstElement = element }
@@ -961,4 +1113,7 @@ function returnGameFunctions() {
         }
         createElementButton(element);
     }
+
+    window.clearInterval(renderInterval);
+    renderInterval = window.setInterval(drawLayers, 1000/60);
 }
