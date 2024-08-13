@@ -115,6 +115,25 @@ class ChatHandler {
         else if (message.messageType == ChatMessageType.LEAVE) this.playerLeft(message);
         else if (message.messageType == ChatMessageType.JOIN) this.playerJoined(message);
         else if (message.messageType == ChatMessageType.SYSTEM) this.systemMessage(message.content);
+        else if (message.messageType == ChatMessageType.DISCORD) {
+            const previous = this.getPrevious(message.createdAt);
+            const messageElement = document.createElement("div");
+            const messageAuthor = document.createElement("h5");
+            messageAuthor.style.marginBottom = "5px";
+            messageAuthor.style.marginTop = 0;
+            messageAuthor.textContent = `Discord > ${message.authorUsername}`;
+            const color = message.authorColor;
+            messageAuthor.style.background = `linear-gradient(to right, ${color.length == 1 ? `${color}, ${color}` : color.join(", ")})`;
+            messageAuthor.style.backgroundClip = "text";
+            messageAuthor.style.webkitTextFillColor = "transparent";
+            const messageContent = document.createElement("h6");
+            messageContent.style.marginTop = 0;
+            messageContent.style.marginBottom = 0;
+            messageContent.textContent = message.content;
+            if (previous?.author == message.author && previous.messageType == ChatMessageType.DISCORD) messageElement.append(messageContent);
+            else messageElement.append(messageAuthor, messageContent);
+            document.getElementById("messageList").appendChild(messageElement);
+        }
         document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
     }
 
