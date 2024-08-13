@@ -16,16 +16,46 @@ const Packet = {
     GSPlace: 14,
     GSDelete: 15,
     CCChatInit: 16,
-    SSDisconnect: 17
+    SSDisconnect: 17,
+    GSToolUse: 18,
+    GCDebug: 19,
+    CCClosed: 20
 }
 
 const ChatMessageType = {
     SYSTEM: 0,
     JOIN: 1,
     LEAVE: 2,
-    MESSAGE: 3
+    MESSAGE: 3,
+    DISCORD: 4
 }
 
+const DisconnectReason = {
+    0: "Connection with the server has been lost or the server closed.",
+    1: "You have been kicked from this server. Reason: %0",
+    2: "You have been banned from this server. Reason: %0",
+    3: "Server is currently restarting, please try again later.",
+    3000: "You are already connected to this server.",
+    3001: "You are not authorized to join this server.",
+    3002: "You have been kicked due to inactivity.",
+    3003: "Authorization error, please try again later.",
+    3004: "Server is full, please try again later."
+}
+
+const PlayerLeaveReason = {
+    0: "%0 has been banned",
+    1: "%0 has been kicked",
+    2: "%0 timed out",
+    3: "%0 left the game"
+}
+
+menuScreens.servers = {
+    name: "Servers",
+    parentDiv: "serversListParent",
+    buttonDescription: "Available servers",
+    show: true,
+    loader: serverListLoader
+}
 menuScreens.chat = {
     name: "Chat",
     parentDiv: "chatParent",
@@ -40,10 +70,17 @@ menuScreens.players = {
     show: true,
     loader: playerListLoader
 }
+menuScreens.disconnected = {
+    name: "Connection lost",
+    show: false,
+    parentDiv: "disconnectedMessageParent",
+    loader: disconnectMessageLoader
+}
 
 class ChatHandler {
     constructor () {
         this.messages = new Map();
+        this.initialized = false;
     }
 
     sendMessage(content) {
@@ -53,7 +90,8 @@ class ChatHandler {
         })
     }
 
-    handleMessage(message) {
+    handleMessage(message, init) {
+        if (!init && !this.initialized) return;
         this.messages.set(message.id, message);
         if (message.messageType == ChatMessageType.MESSAGE) {
             const previous = this.getPrevious(message.createdAt);
@@ -86,8 +124,9 @@ class ChatHandler {
 
     initialize(message_) {
         for (const message of message_.messages) {
-            this.handleMessage(message);
+            this.handleMessage(message, true);
         }
+        this.initialized = true;
     }
 
     systemMessage(content) {
@@ -109,7 +148,7 @@ class ChatHandler {
         const messageAuthor = document.createElement("h5");
         messageAuthor.style.marginBottom = "5px";
         messageAuthor.style.marginTop = 0;
-        messageAuthor.textContent = username + " left the game";
+        messageAuthor.textContent = PlayerLeaveReason[message.reason ?? 3].replace("%0", username);
         messageAuthor.style.background = `linear-gradient(to right, ${color.length == 1 ? `${color}, ${color}` : color.join(", ")})`;
         messageAuthor.style.backgroundClip = "text";
         messageAuthor.style.webkitTextFillColor = "transparent";
@@ -118,7 +157,7 @@ class ChatHandler {
     }
 
     playerJoined(message) {
-        console.log("playerJoined");
+        console.log("playerJoined", message.id);
         const username = message.authorUsername;
         if (!username) return;
         const color = message.authorColor;
@@ -136,7 +175,7 @@ class ChatHandler {
 }
 
 class ServerHandler {
-    constructor (socket) {
+    constructor (socket, config) {
         this.socket = socket;
         this.clients = new Map();
         this.chatHandler = new ChatHandler();
@@ -150,6 +189,8 @@ class ServerHandler {
         this.tpsCount = 0;
         this.lastCheck = -1;
         this.tps = 0;
+        this.identified = false;
+        this.config = config;
         socket.onopen = () => {
             logMessage("connected");
         }
@@ -172,13 +213,14 @@ class ServerHandler {
         const response = await fetch("https://sandboxelsserver.xyz/auth/serverAuth/generate", {
             body: JSON.stringify({
                 session: sessionHandler.session,
-                serverIP: "sandboxelsserver.xyz/play/room1"
+                serverIP: `${gameHandler.server}/play/${gameHandler.room.config.name}`
             }),
             mode: "cors",
             headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "https://sandboxelsserver.xyz/auth"},        
             method: "POST"
         });
         const accessToken = await response.text();
+        console.log("sending identify");
         this.sendMessage(Packet.SSIdentify, {
             accessToken
         });
@@ -205,13 +247,13 @@ class ServerHandler {
         playerItem.id = `playerItem-${message.id}`;
         playerItem.append(playerName);
         document.getElementById("playerList").append(playerItem);
+        document.getElementById("playersOnlineChat").innerText = `Players online: ${this.clients.size}/${this.config?.maxPlayers ?? 20}`;
     }
 
-    playerLeft(message, origin) {
-        console.log(message, origin);
+    playerLeft(message) {
         this.clients.delete(message.id);
-        logMessage(`${message.id} left`);
         document.getElementById(`playerItem-${message.id}`).remove();
+        document.getElementById("playersOnlineChat").innerText = `Players online: ${this.clients.size}/${this.config?.maxPlayers ?? 20}`;
     }
 
     heartbeat() {
@@ -238,14 +280,11 @@ class ServerHandler {
         this.settings = message.settings;
         this.elements = message.elements;
         this.width = message.width;
-        this.height = message.height; 
+        this.height = message.height;
+        this.identified = true;
         for (const element of this.elements) {
             createElementButton(element.name, element.color, element.category, element.darkText);
         }
-    }
-
-    chatMessageRecieved(message) {
-        this.chatHandler.handleMessage(message);
     }
 
     gamePlayersInit(message) {
@@ -262,22 +301,55 @@ class ServerHandler {
             playerItem.append(playerName);
             document.getElementById("playerList").append(playerItem);
         }
+        document.getElementById("playersOnlineChat").innerText = `Players online: ${this.clients.size}/${this.config?.maxPlayers ?? 20}`;
     }
 
     onMessage(message) {
-        if (message.type == Packet.SCIdentify) this.identify(message);
-        if (message.type == Packet.SCClientJoin) this.playerJoined(message);
-        if (message.type == Packet.SCClientLeave) this.playerLeft(message, "onMessage");
-        if (message.type == Packet.SCClientUpdate) this.playerUpdated(message);
-        if (message.type == Packet.GCGameInit) this.gameInit(message);
-        if (message.type == Packet.CCChatMessage) this.chatMessageRecieved(message);
-        if (message.type == Packet.GCGamePlayers) this.gamePlayersInit(message);
-        if (message.type == Packet.GCGameState) this.gameStateUpdate(message);
-        if (message.type == Packet.SCHeartbeat) this.heartbeat();
-        if (message.type == Packet.CCChatInit) this.chatHandler.initialize(message);
+        switch (message.type) {
+            case Packet.SCIdentify: this.identify(message);
+                break;
+            case Packet.SCClientJoin: this.playerJoined(message);
+                break;
+            case Packet.SCClientLeave: this.playerLeft(message);
+                break;
+            case Packet.SCClientUpdate: this.playerUpdated(message);
+                break;
+            case Packet.GCGameInit: this.gameInit(message);
+                break;
+            case Packet.CCChatMessage: this.chatHandler.handleMessage(message, false);
+                break;
+            case Packet.GCGamePlayers: this.gamePlayersInit(message);
+                break;
+            case Packet.GCGameState: this.gameStateUpdate(message);
+                break;
+            case Packet.SCHeartbeat: this.heartbeat();
+                break;
+            case Packet.CCChatInit: this.chatHandler.initialize(message);
+                break;
+            case Packet.GCDebug:
+                // FROM DEBUG TOOL
+                mouseIsDown = false;
+                if (shiftDown) { toggleShift() }
+                var output = pixel.element.toUpperCase()+" at x"+pixel.x+", y"+pixel.y+", tick"+pixelTicks+"\n";
+                for (var i in pixel) {
+                    if (i !== "x" && i !== "y" && i !== "element") {
+                        output += "  " + i + ": " + pixel[i] + "\n";
+                    }
+                }
+                console.log(output);
+                console.log(JSON.stringify(pixel));
+                alert(output);
+                break;
+            case Packet.CCClosed:
+                console.log(message);
+                displayDisconnectMessage(message.reason, message.message);
+                this.disconnect();
+                break;
+        }
     }
 
     placePixel(element, x, y) {
+        if (!this.identified) return;
         this.sendMessage(Packet.GSPlace, {
             pixels: [{x, y, element}],
             replace: mode == "replace"
@@ -289,21 +361,98 @@ class GameHandler {
     constructor () {
         this.room = null;
         this.connected = false;
+        this.availableServers = [];
+        this.availableRooms = [];
+        this.server = null;
     }
 
-    connect(ip) {
+    async connect(server, room) {
         this.connected = true;
-        const socket = new WebSocket(`wss://${ip}`);
-        this.room = new ServerHandler(socket);
+        const roomConfig = await fetch(`https://${server}/${room}/config`, {
+            mode: "cors",
+            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': `https://${server}/${room}`},        
+            method: "GET"
+        });
+        if (roomConfig.status != 200) throw "Invalid server IP";
+        const config = await roomConfig.json();
+        const socket = new WebSocket(`wss://${server}/play/${room}`);
+        this.room = new ServerHandler(socket, config);
+        this.server = server;
         overwriteGameFunctions();
         document.querySelectorAll(".elementButton").forEach(b => b.remove());
+        document.getElementById("betterMenuScreens_chatButton").style.display = "block";
+        document.getElementById("betterMenuScreens_playersButton").style.display = "block";
     }
 
     disconnect() {
         this.connected = false;
         this.room.disconnect();
         this.room = null;
+        this.server = null;
         returnGameFunctions();
+        document.getElementById("betterMenuScreens_chatButton").style.display = "none";
+        document.getElementById("betterMenuScreens_playersButton").style.display = "none";
+        document.getElementById("playersOnlineChat").innerText = `You are not connected`;
+        if (showingMenu == "chat") {
+            closeMenu();
+        }
+    }
+
+    async getAvailableServers() {
+        const response = await fetch("https://sandboxelsserver.xyz/auth/servers", {
+            mode: "cors",
+            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': "https://sandboxelsserver.xyz/auth"},        
+            method: "GET"
+        })
+
+        if (response.status == 404) return [];
+
+        return await response.json();
+    }
+
+    async getAvailableRooms(serverIP) {
+        const response = await fetch(`https://${serverIP}/config`, {
+            mode: "cors",
+            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': `https://${serverIP}/config`},        
+            method: "GET"
+        })
+
+        if (response.status == 404) return [];
+
+        return await response.json();
+    }
+
+    async getRoomConfig(serverIP, roomName) {
+        const response = await fetch(`https://${serverIP}/${roomName}/config`, {
+            mode: "cors",
+            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': `https://${serverIP}/${roomName}`},        
+            method: "GET"
+        })
+
+        if (response.status == 404) return null;
+
+        return await response.json();
+    }
+
+    async pingRoom(serverIP, roomName) {
+        const time = Date.now();
+        const response = await fetch(`https://${serverIP}/${roomName}`, {
+            mode: "cors",
+            headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': `https://${serverIP}/${roomName}`},        
+            method: "GET"
+        })
+
+        const ping = Date.now() - time;
+
+        if (response.status == 404) return { ping: -1, players: [] };
+
+        return { players: await response.json(), ping };
+    }
+
+    async parseURLParams() {
+        if (!urlParams.has("lobby")) return;
+        const serverInfo = (await this.getAvailableRooms(urlParams.get("server") ?? "sandboxelsserver.xyz"));
+        if (serverInfo.map(a => a.lobby).includes(urlParams.get("lobby"))) this.connect(urlParams.get("server") ?? "sandboxelsserver.xyz", serverInfo.find(a => a.lobby == urlParams.get("lobby")).name);
     }
 }
 
@@ -365,6 +514,7 @@ class SessionHandler {
             const session = await response.text();
             this.setCookie(session);
             await this.fetchUserInfo();
+            urlParams.delete("token");
         } else return;
     }
 
@@ -395,6 +545,36 @@ if (urlParams.has("token")) sessionHandler.getSession();
 else {
     (async () => {await sessionHandler.getCookie();})()
 }
+
+(async () => {
+    gameHandler.availableServers = await gameHandler.getAvailableServers();
+    const rooms = [];
+    for (const server of gameHandler.availableServers) {
+        const availableRooms = await gameHandler.getAvailableRooms(server.ip);
+        rooms.push(...availableRooms.map(a => ({room: a.name, server: server.ip})));
+    }
+    gameHandler.availableRooms = rooms;
+    for (let i = 0; i < rooms.length; i++) {
+        const { room, server } = rooms[i];
+        const config = await gameHandler.getRoomConfig(server, room);
+        const slot = document.createElement("span");
+        slot.id = `serverSlot${i}`;
+        slot.className = "serverSlot";
+        const motd = document.createElement("span");
+        motd.innerText = config.motd;
+        const joinButton = document.createElement("span");
+        joinButton.innerText = "Join";
+        joinButton.className = "saveOption";
+        joinButton.style.color = "#ff00ff";
+        joinButton.onclick = () => {
+            gameHandler.connect(server, room);
+        }
+        slot.append(motd, joinButton);
+        document.getElementById("serverList").append(slot);
+    }
+
+    await gameHandler.parseURLParams();
+})()
 
 let lastMousePos = [];
 let lastMouseSize = -1;
@@ -452,25 +632,38 @@ function decodePixels(array) {
 }
 
 // HTML STUFF
+function displayDisconnectMessage(reason, message) {
+    console.log("displayDisconnectMessage");
+    if (!message && [1, 2].includes(reason)) message = (reason == 1 ? "Kicked" : "Banned") + " by an operator."
+    document.getElementById("disconnectMessageReason").innerText = DisconnectReason[reason].replace("%0", message);
+    openMenu("disconnected", true);
+}
+
+function disconnectMessageLoader() {
+    const reason = document.createElement("p");
+    reason.style.textAlign = "center";
+    reason.id = "disconnectMessageReason";
+    new MenuScreen()
+        .setTitle("Connection lost")
+        .setParentDivId("disconnectedMessageParent")
+        .setInnerDivId("disconnectedMessage")
+        .addNode(reason)
+        .build();
+}
+
 function chatLoader() {
-    console.log("ah")
-    const chatNote = document.createElement("i");
-    chatNote.textContent = "This chat will be better at one point";
+    const chatNote = document.createElement("span");
+    chatNote.textContent = "You are not connected";
+    chatNote.id = "playersOnlineChat";
+    chatNote.style.fontSize = "1em";
+    chatNote.style.color = "#808080";
+    const hr = document.createElement("hr");
+    hr.style.width = "100%";
+    hr.style.backgroundColor = "#808080";
+    hr.style.height = "0.15em";
+    hr.style.border = "none";
     const messageList = document.createElement("div");
     messageList.id = "messageList";
-    // for (const id of Array.from(server.chatHandler.messages.keys())) {
-    //     const message = server.chatHandler.messages.get(id);
-    //     const messageElement = document.createElement("div");
-    //     const messageAuthor = document.createElement("h5");
-    //     messageAuthor.style.marginBottom = "5px";
-    //     messageAuthor.textContent = server.clients.get(message.author).username;
-    //     messageAuthor.style.color = server.clients.get(message.author).color;
-    //     const messageContent = document.createElement("h6");
-    //     messageContent.style.marginTop = 0;
-    //     messageContent.textContent = message.content;
-    //     messageElement.append(messageAuthor, messageContent);
-    //     messageList.appendChild(messageElement);
-    // }
     const chatInput = document.createElement("input");
     chatInput.type = "text";
     chatInput.id = "chatMessage";
@@ -478,7 +671,7 @@ function chatLoader() {
     chatInput.onkeydown = (ev) => {
         if (ev.key == "Enter") {
             if (document.getElementById("chatMessage").value.length == 0) return;
-            if (gameHandler.connected) {
+            if (gameHandler.connected && gameHandler.room.identified) {
                 gameHandler.room.chatHandler.sendMessage(document.getElementById("chatMessage").value);
                 document.getElementById("chatMessage").value = "";
             }
@@ -492,12 +685,11 @@ function chatLoader() {
         .setParentDivId("chatParent")
         .setInnerDivId("chat")
         .setMenuTextId("chatMenuText")
-        .addNode([chatNote, messageList, document.createElement("br"), document.createElement("br")])
+        .addNode([chatNote, hr, messageList, document.createElement("br"), document.createElement("br")])
         .build();
     document.getElementById("chatParent").append(chatInput);
 }
 function playerListLoader() {
-    console.log("ah")
     const playerList = document.createElement("ul");
     playerList.id = "playerList";
     new MenuScreen()
@@ -505,6 +697,17 @@ function playerListLoader() {
         .setParentDivId("playersListParent")
         .setInnerDivId("playersList")
         .addNode(playerList)
+        .build();
+}
+function serverListLoader() {
+    const style = document.createElement("style"); 
+    style.innerHTML = `#serverList {padding-top: 1em; height:70%}\n.serverSlot {display: block; border-top: solid gray; padding: 1em}\n.serverSlot:last-child {border-bottom: solid gray}`
+    document.head.append(style);
+    return new MenuScreen()
+        .setTitle("Servers")
+        .setParentDivId("serversListParent")
+        .setInnerDivId("serversList")
+        .setMenuTextId("serverList")
         .build();
 }
 
@@ -582,6 +785,7 @@ function overwriteGameFunctions() {
             const layerCanvas = canvasLayersPost[i];
             ctx.drawImage(layerCanvas, 0, 0);
         }
+        if (!gameHandler.connected || !gameHandler.room.identified) return;
         let a = outOfBounds(mousePos.x, mousePos.y) ? null : [mousePos.x, mousePos.y];
         let b = lastMousePos;
         if ((a == null && Array.isArray(b)) || (Array.isArray(a) && b == null) || (Array.isArray(a) && Array.isArray(b) && (a[0] != b[0] || a[1] != b[1])) || lastMouseSize != mouseSize) {
@@ -1014,9 +1218,9 @@ function overwriteGameFunctions() {
         else {
             var coords = mouseRange(mouseX,mouseY);
         }
+        if (!gameHandler.connected || !gameHandler.room.identified) return;
         let pixels = coords.filter(a => gameHandler.room.pixels.find(b => b.x == a[0] && b.y == a[1]))
-        if (pixels.length > 0)
-        gameHandler.room.sendMessage(Packet.GSDelete, {pixels: pixels.map(a => ({x: a[0], y: a[1]}))});
+        if (pixels.length > 0) gameHandler.room.sendMessage(Packet.GSDelete, {pixels: pixels.map(a => ({x: a[0], y: a[1]}))});
     }
     
     createElementButton = (elementName, color, category, darkText) => {
@@ -1089,6 +1293,7 @@ function returnGameFunctions() {
     createElementButton = oldCreateElementButton;
     createPixel = oldCreatePixel;
     tickPixels = oldTickPixels;
+    clearAll(false);
     drawLayers = oldDrawLayers;
     document.querySelectorAll(".elementButton").forEach(a => a.remove());
     for (var element in elements) {
