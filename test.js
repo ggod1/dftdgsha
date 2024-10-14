@@ -942,9 +942,9 @@ class BinaryPacket {
         this.concat(buffer);
         a.forEach(element => {
             const bufferInner = new ArrayBuffer(5);
-            const view = new DataView(bufferInner);
-            view.setUint8(0, 3);
-            view.setInt32(1, element.byteLength);
+            const view2 = new DataView(bufferInner);
+            view2.setUint8(0, 3);
+            view2.setInt32(1, element.byteLength);
             this.concat(bufferInner);
             this.concat(element);
         })
@@ -1721,8 +1721,7 @@ function overwriteGameFunctions() {
                         .getBuffer();
                     return b;
                 }))
-                .getBuffer()
-            );
+                .getBuffer());
         }
     }
     
