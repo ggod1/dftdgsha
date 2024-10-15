@@ -1269,6 +1269,7 @@ const oldCreateElementButton = createElementButton;
 const oldCreatePixel = createPixel;
 const oldTickPixels = tickPixels;
 const oldDrawLayers = drawLayers;
+const oldClearLayers = clearLayers;
 
 function overwriteGameFunctions() {
     const drawCursors = () => {
@@ -1305,6 +1306,14 @@ function overwriteGameFunctions() {
                 // ctx.fillText(username, topLeft[0] * pixelSize - ctx.measureText(username), topLeft[1] * pixelSize);
                 ctx.fillText(username, (pos.position[0] - mouseOffset) * pixelSize + (pos.size * pixelSize / 2) - textWidth / 2, pos.position[1] * pixelSize + pos.size * pixelSize + 2);
             }
+        }
+    }
+    clearLayers = () => {
+        const canvasLayerKeys = Object.keys(canvasLayers);
+        for (let i = 0; i < canvasLayerKeys.length; i++) {
+            const layerCanvas = canvasLayers[canvasLayerKeys[i]];
+            const layerCtx = layerCanvas.getContext("2d");
+            layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
         }
     }
     drawLayers = (includeBackground) => {
@@ -1798,6 +1807,7 @@ function returnGameFunctions() {
     tickPixels = oldTickPixels;
     clearAll(false);
     drawLayers = oldDrawLayers;
+    clearLayers = oldClearLayers;
     document.querySelectorAll(".elementButton").forEach(a => a.remove());
     for (var element in elements) {
         if (elements[element].removeAfterDisconnect) {
